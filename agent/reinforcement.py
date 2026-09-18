@@ -1,23 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 
-from . import evaluator, traits as traits_module
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from prompts import build_feedback_prompt  # noqa: E402
+from . import evaluator
+from . import traits as traits_module
+from .prompts import build_feedback_prompt
 
 TOP_N_IN_FEEDBACK = 3
 
 
 async def run(args: dict, shared, agent_name: str) -> str:
-
-    episodes = int(args.get("episodes", 1) or 1)
-    if episodes < 1:
-        raise ValueError("'episodes' must be at least 1")
-
+    """The `reinforcement` tool: rank, reward and the top agents' trait tables."""
     positions = await evaluator.compute_rank_positions(shared)
     n = len(positions)
 
@@ -39,40 +32,27 @@ async def run(args: dict, shared, agent_name: str) -> str:
     if self_entry is None:
         raise RuntimeError(f"agent '{agent_name}' has not been evaluated yet")
 
-    rank_position = self_entry["rank_position"]
-    reward = self_entry["reward"]
-
-    # The top-3 agents' full trait tables, as the A.2.3 prompt requires.
     leaderboard_markdown = _render_leaderboard(leaderboard[:TOP_N_IN_FEEDBACK], snapshot)
-    feedback_prompt = build_feedback_prompt(rank_position, n, reward, leaderboard_markdown)
+    feedback_prompt = build_feedback_prompt(self_entry["rank_position"], n, self_entry["reward"], leaderboard_markdown)
 
-    return json.dumps(
-        {
-            "status": "ok",
-            "agent": agent_name,
-            "rank_position": rank_position,
-            "reward": reward,
-            "agent_count": n,
-            "feedback_prompt": feedback_prompt,
-            "leaderboard": [
-                {k: v for k, v in entry.items() if k != "trait"} | {"trait": round(entry["trait"], 9)}
-                for entry in leaderboard
-            ],
-        }
-    )
+    return json.dumps({
+        "status": "ok",
+        "agent": agent_name,
+        "rank_position": self_entry["rank_position"],
+        "reward": self_entry["reward"],
+        "agent_count": n,
+        "feedback_prompt": feedback_prompt,
+        "leaderboard": [{**e, "trait": round(e["trait"], 9)} for e in leaderboard],
+    })
 
 
 def _render_leaderboard(top_entries: list[dict], snapshot: dict) -> str:
     blocks = []
     for entry in top_entries:
-        name = entry["agent"]
-        evaluation = snapshot.get(name)
+        evaluation = snapshot.get(entry["agent"])
         if evaluation is None:
             continue
-        blocks.append(
-            traits_module.format_traits_markdown(
-                f"{name} — rank {entry['rank_position']}, reward {entry['reward']}",
-                evaluation.trait_set,
-            )
-        )
+        blocks.append(traits_module.format_traits_markdown(
+            f"{entry['agent']}: rank {entry['rank_position']}, reward {entry['reward']}", evaluation.trait_set
+        ))
     return "\n".join(blocks) if blocks else "(no evaluated agents yet)"

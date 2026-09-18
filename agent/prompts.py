@@ -14,8 +14,6 @@ in with the algorithm and dataset names.
 
 from __future__ import annotations
 
-from typing import Optional
-
 # The 13 primary/secondary traits the evolution prompt asks the agent to
 # annotate, in the paper's own order (A.2.2).
 TRAIT_CHECKLIST = [
@@ -152,8 +150,8 @@ DEFAULT_DATASET_NOTE = (
 def build_evolution_prompt(
     original_code: str,
     mode: str,
-    best_traits_markdown: Optional[str] = None,
-    dataset_note: Optional[str] = None,
+    best_traits_markdown: str | None = None,
+    dataset_note: str | None = None,
 ) -> str:
     """`mode` is one of "annotate", "first", "crossover" — the paper's
     clauses 5, 6 and 7 respectively. `best_traits_markdown` is the
