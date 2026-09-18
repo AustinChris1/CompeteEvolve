@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import sklearn.datasets as sk_datasets
 
@@ -13,6 +13,7 @@ class AlgorithmSpec:
     dataset_name: str                      # human-readable dataset name
     dataset_loader: Callable[[], object]   # e.g. sklearn.datasets.load_iris
     baseline_code: str                     # annotated `def run(data_path) -> dict`
+    reference_code: str                    # same harness, scikit-learn default hyperparameters
 
 
 def _dataset_to_csv(loader: Callable[[], object]) -> str:
@@ -23,7 +24,7 @@ def _dataset_to_csv(loader: Callable[[], object]) -> str:
         str(n).replace(" ", "_").replace("(", "").replace(")", "") for n in bunch.feature_names
     ]
     lines = [",".join(feature_names + ["target"])]
-    for row, target in zip(bunch.data, bunch.target):
+    for row, target in zip(bunch.data, bunch.target, strict=True):
         lines.append(",".join([repr(float(v)) for v in row] + [str(int(target))]))
     return "\n".join(lines) + "\n"
 
@@ -57,14 +58,14 @@ def run(data_path: str) -> dict:
     model = {model}
 
     # Training time (TT) is measured around fit() only.
-    _t0 = time.time()
+    _t0 = time.perf_counter()
     model.fit(X_train, y_train)
-    training_time = time.time() - _t0
+    training_time = time.perf_counter() - _t0
 
     # Inference time (TI) is measured around predict() only.
-    _t1 = time.time()
+    _t1 = time.perf_counter()
     predictions = model.predict(X_test)
-    inference_time = time.time() - _t1
+    inference_time = time.perf_counter() - _t1
 
     accuracy = float(accuracy_score(y_test, predictions))
 
@@ -192,6 +193,46 @@ _SVM_CODE = _PREAMBLE.format(
 )
 
 
+# References: the same harness with scikit-learn's default hyperparameters.
+# Reported next to the baseline so a reader can tell a recovered configuration
+# from an improvement over the library.
+
+_LOGISTIC_REGRESSION_REFERENCE = _PREAMBLE.format(
+    imports="from sklearn.linear_model import LogisticRegression".rjust(len("from sklearn.linear_model import LogisticRegression") + 4),
+    split=_DEFAULT_SPLIT,
+    scaling=_NO_SCALING,
+    model="LogisticRegression(max_iter=1000, random_state=42)",
+)
+
+_KNN_REFERENCE = _PREAMBLE.format(
+    imports="from sklearn.neighbors import KNeighborsClassifier".rjust(len("from sklearn.neighbors import KNeighborsClassifier") + 4),
+    split=_DEFAULT_SPLIT,
+    scaling=_NO_SCALING,
+    model="KNeighborsClassifier()",
+)
+
+_DECISION_TREE_REFERENCE = _PREAMBLE.format(
+    imports="from sklearn.tree import DecisionTreeClassifier".rjust(len("from sklearn.tree import DecisionTreeClassifier") + 4),
+    split=_DEFAULT_SPLIT,
+    scaling=_SCALING_HOOK,
+    model="DecisionTreeClassifier(random_state=42)",
+)
+
+_RANDOM_FOREST_REFERENCE = _PREAMBLE.format(
+    imports="from sklearn.ensemble import RandomForestClassifier".rjust(len("from sklearn.ensemble import RandomForestClassifier") + 4),
+    split=_DEFAULT_SPLIT,
+    scaling=_SCALING_HOOK,
+    model="RandomForestClassifier(random_state=42)",
+)
+
+_SVM_REFERENCE = _PREAMBLE.format(
+    imports="from sklearn.svm import SVC".rjust(len("from sklearn.svm import SVC") + 4),
+    split=_DEFAULT_SPLIT,
+    scaling=_NO_SCALING,
+    model="SVC(random_state=42)",
+)
+
+
 ALGORITHMS: dict[str, AlgorithmSpec] = {
     "logistic_regression": AlgorithmSpec(
         name="logistic_regression",
@@ -199,6 +240,7 @@ ALGORITHMS: dict[str, AlgorithmSpec] = {
         dataset_name="Iris",
         dataset_loader=sk_datasets.load_iris,
         baseline_code=_LOGISTIC_REGRESSION_CODE,
+        reference_code=_LOGISTIC_REGRESSION_REFERENCE,
     ),
     "knn": AlgorithmSpec(
         name="knn",
@@ -206,6 +248,7 @@ ALGORITHMS: dict[str, AlgorithmSpec] = {
         dataset_name="Iris",
         dataset_loader=sk_datasets.load_iris,
         baseline_code=_KNN_CODE,
+        reference_code=_KNN_REFERENCE,
     ),
     "decision_tree": AlgorithmSpec(
         name="decision_tree",
@@ -213,6 +256,7 @@ ALGORITHMS: dict[str, AlgorithmSpec] = {
         dataset_name="Iris",
         dataset_loader=sk_datasets.load_iris,
         baseline_code=_DECISION_TREE_CODE,
+        reference_code=_DECISION_TREE_REFERENCE,
     ),
     "random_forest": AlgorithmSpec(
         name="random_forest",
@@ -220,6 +264,7 @@ ALGORITHMS: dict[str, AlgorithmSpec] = {
         dataset_name="Iris",
         dataset_loader=sk_datasets.load_iris,
         baseline_code=_RANDOM_FOREST_CODE,
+        reference_code=_RANDOM_FOREST_REFERENCE,
     ),
     "svm": AlgorithmSpec(
         name="svm",
@@ -227,6 +272,7 @@ ALGORITHMS: dict[str, AlgorithmSpec] = {
         dataset_name="Iris",
         dataset_loader=sk_datasets.load_iris,
         baseline_code=_SVM_CODE,
+        reference_code=_SVM_REFERENCE,
     ),
 }
 

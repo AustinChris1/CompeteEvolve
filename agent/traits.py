@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Optional
 
 from . import memory
+from .config import MU_THRESHOLD_DEFAULT
 
 INCLUDE_ERROR_PENALTY_IN_PERFORMANCE = True
 
-MU_THRESHOLD = 1.25 / 2.25
+MU_THRESHOLD = MU_THRESHOLD_DEFAULT
 
 
 _MIN_TIME = 1e-6
@@ -90,7 +90,7 @@ def token_similarity(code_a: str, code_b: str) -> float:
     return memory.cosine_similarity(memory.embed(code_a), memory.embed(code_b))
 
 
-def compute_novelty(sample_code: str, original_code: str, previous_code: Optional[str]) -> float:
+def compute_novelty(sample_code: str, original_code: str, previous_code: str | None) -> float:
     reference_previous = previous_code if previous_code else original_code
     sim_original = token_similarity(sample_code, original_code)
     sim_previous = token_similarity(sample_code, reference_previous)
@@ -128,11 +128,55 @@ def compute_mu(performance_original: float, performance_evolved: float) -> float
     return performance_evolved / denominator
 
 
+def threshold_evidence(baseline: TraitSet | None, sample: TraitSet, threshold: float) -> dict:
+    """Whether a candidate has *proven* it crossed mu, not merely computed a number.
+
+    mu = P2 / (P1 + P2) is only meaningful when both P1 and P2 come from clean,
+    comparable runs. Each failed condition is listed in `reasons`; `proven` is
+    true only when the list is empty and mu exceeds the threshold.
+    """
+    reasons: list[str] = []
+    p1 = 0.0
+    if baseline is None:
+        reasons.append("the original code has not been measured")
+    else:
+        p1 = baseline.secondary.task_performance
+        if baseline.primary.syntax_errors or baseline.primary.runtime_errors:
+            reasons.append("the original code failed in the sandbox, so P1 is not a valid reference")
+        elif p1 <= 0.0:
+            reasons.append("the original code's performance P1 is zero")
+
+    p2 = sample.secondary.task_performance
+    if sample.primary.syntax_errors:
+        reasons.append("the candidate has a syntax error")
+    if sample.primary.runtime_errors:
+        reasons.append("the candidate failed at runtime")
+    if sample.primary.logical_errors:
+        reasons.append(f"the candidate has {sample.primary.logical_errors} logical error(s)")
+    if baseline is not None and sample.primary.model_accuracy + 1e-9 < baseline.primary.model_accuracy:
+        reasons.append(
+            f"the candidate's accuracy {sample.primary.model_accuracy:.4f} is below the original's "
+            f"{baseline.primary.model_accuracy:.4f}; a faster but worse model does not count"
+        )
+
+    mu = compute_mu(p1, p2)
+    reached = mu > threshold
+    return {
+        "mu": mu,
+        "threshold": threshold,
+        "performance_original": p1,
+        "performance_candidate": p2,
+        "reached": reached,
+        "proven": reached and not reasons,
+        "reasons": reasons,
+    }
+
+
 def derive(
     primary: PrimaryTraits,
     sample_code: str,
     original_code: str,
-    previous_code: Optional[str],
+    previous_code: str | None,
     is_reference: bool = False,
 ) -> SecondaryTraits:
     time = compute_time(primary.training_time, primary.inference_time)
@@ -162,7 +206,7 @@ def build(
     primary: PrimaryTraits,
     sample_code: str,
     original_code: str,
-    previous_code: Optional[str] = None,
+    previous_code: str | None = None,
     stderr: str = "",
     is_reference: bool = False,
 ) -> TraitSet:
