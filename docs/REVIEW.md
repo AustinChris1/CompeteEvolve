@@ -65,6 +65,24 @@ Two mechanisms:
 Reproduce: `python scripts/timing_noise.py logistic_regression` (added in this
 branch).
 
+After the sandbox rewrite in this branch (child-reported K and Mu with
+floors, no external sampler), the same script gives:
+
+| Condition | T median | T min | T max | P* median | P* min | P* max | Errors |
+|---|---|---|---|---|---|---|---|
+| Sequential, 5 runs | 9.5 ms | 5.9 ms | 13.4 ms | 0.79 | 0.54 | 2.97 | 0 |
+| 5 concurrent | 7.3 ms | 5.1 ms | 9.6 ms | 2.04 | 1.54 | 3.19 | 0 |
+| 10 concurrent | 9.8 ms | 8.9 ms | 11.8 ms | 0.70 | 0.56 | 0.97 | 0 |
+| 20 concurrent | 0.0 ms | 0.0 ms | 16.9 ms | 0.00 | 0.00 | 0.26 | 11 |
+
+The 10^6 inflation is gone (a crash now scores 0, not 69 million). What
+remains is genuine wall-clock jitter: a 5x spread in P* for identical code
+run five times in a row on an idle machine. That is the floor for a single
+measurement of a 10 ms fit, and it is why `sandbox_repeats` exists and why
+reported numbers need several runs. The 11 errors at 20-way concurrency are
+process launches failing on this laptop, which is what
+`sandbox_concurrency=1` prevents.
+
 A consequence worth stating plainly: because T divides P, a candidate that
 scores 0.30 accuracy and reports a 0.2 ms fit outranks one that scores 0.90 in
 5 ms (P = 1500 versus 180). The ranking has no accuracy floor. The `proven`
