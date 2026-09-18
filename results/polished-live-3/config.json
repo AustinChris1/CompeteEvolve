@@ -1,0 +1,18 @@
+{
+  "config": {
+    "agents": 2,
+    "generations": 2,
+    "islands": 2,
+    "samples_per_island": 2,
+    "mu_threshold": 0.5555555555555556,
+    "max_agent_turns": 12,
+    "sandbox_timeout": 60.0,
+    "sandbox_concurrency": 1,
+    "sandbox_repeats": 2,
+    "llm_rpm": 8,
+    "logic_check": true
+  },
+  "roles": "chat + evolution: gemini (gemini-3.5-flash-lite)",
+  "algorithm": "logistic_regression",
+  "dataset": "Iris"
+}

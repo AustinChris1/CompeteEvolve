@@ -1,0 +1,38 @@
+{
+  "algorithm": "logistic_regression",
+  "version": 1,
+  "report": "benchmarks\\logisticregression01.md",
+  "chart": "benchmarks\\logisticregression01.png",
+  "threshold": {
+    "mu": 0.07974737526323813,
+    "threshold": 0.5555555555555556,
+    "performance_original": 0.8819563872811363,
+    "performance_candidate": 0.07642869478632296,
+    "reached": false,
+    "proven": false,
+    "reasons": []
+  },
+  "not_evaluated": [],
+  "ranking": [
+    {
+      "rank": 1,
+      "agent": "agent-2",
+      "reward": 1,
+      "evaluated": true,
+      "performance": 0.016715507627332288,
+      "task_performance": 0.07642869478632296,
+      "accuracy": 1.0,
+      "time": 0.21455770000466146
+    },
+    {
+      "rank": 2,
+      "agent": "agent-1",
+      "reward": 0,
+      "evaluated": true,
+      "performance": 0.003826728892320545,
+      "task_performance": 0.028646353613558984,
+      "accuracy": 0.9,
+      "time": 0.2718598000064958
+    }
+  ]
+}

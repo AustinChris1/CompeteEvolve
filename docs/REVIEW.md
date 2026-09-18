@@ -232,6 +232,45 @@ What "standardized" should mean for this repo, roughly in the order it pays off:
 8. **Dead code.** `default_model_for` (with model names that disagree with
    `_ROLE_DEFAULTS`), `remember_csv_file`, the unused `episodes` argument.
 
+## 3.1 Live run of this branch
+
+2 agents, 2 generations x 2 islands x 2 samples, sandbox sequential with 2
+repeats, gemini-3.5-flash-lite for both roles (the larger Flash models
+returned 503 "high demand" all afternoon), logic check on. Finished cleanly
+with exit code 0. Report: `benchmarks/logisticregression02.md`; every sample,
+the config and the summary: `results/polished-live-3/`.
+
+| Code | P* | Accuracy | Loss | Time |
+|---|---|---|---|---|
+| Original (crippled logistic regression) | 0.882 | 0.7000 | 0.829 | 24 ms |
+| scikit-learn defaults (reference) | 0.178 | 1.0000 | 0.111 | 108 ms |
+| Evolved winner (agent-2) | 0.076 | 1.0000 | 0.010 | 215 ms |
+
+mu = 0.0797, threshold not met, and correctly reported as not met. What the
+run demonstrates:
+
+- With the original measured once and in isolation, the "25 percent
+  improvement" does not happen. Every one of the 54 candidates raised
+  accuracy to 0.90 or 1.00 and every one scored below the original, because
+  each needs 8x to 18x the original's 24 ms. The committed v1 report reached
+  mu = 0.91 only because its original had been measured at 127 ms under
+  five-agent load. Section 1.2 predicted this; the run confirms it.
+- The formula prefers the broken configuration to scikit-learn's own defaults
+  (P* 0.88 versus 0.18). A metric under which the library's default loses to
+  `max_iter=5` cannot support a claim of improving the library.
+- **None of the 54 candidates was a logistic regression.** The agents replaced
+  the model with `HistGradientBoostingClassifier` and `VotingClassifier`
+  ensembles, which the evolution prompt invites by listing "model choice" as
+  a trait. If the paper is about improving a given algorithm, the model
+  class has to be fixed and the sandbox has to reject substitutions.
+- The turn cap ended both agents after 12 turns and three evolution cycles
+  each; without it they would have continued indefinitely, since the
+  threshold is unreachable under this metric.
+- Ranking uses each agent's *latest* evaluator result, as the paper's "your
+  last sample ranked" wording implies. Agent 1 evaluated a 1.000 candidate
+  and then a 0.900 one, and was ranked on the second. Decide whether that is
+  intended.
+
 ## 4. What I would change in the paper
 
 - Report against two references: the crippled baseline (what the system was
