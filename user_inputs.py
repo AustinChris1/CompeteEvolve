@@ -5,7 +5,6 @@ import io
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from agent import sandbox
 
@@ -45,8 +44,8 @@ class CustomInputs:
     baseline_code: str
     dataset_csv: str
     description: DatasetDescription
-    baseline_accuracy: Optional[float]
-    baseline_warning: Optional[str]
+    baseline_accuracy: float | None
+    baseline_warning: str | None
 
 
 def sanitize_algorithm_name(raw: str) -> str:
@@ -141,7 +140,7 @@ def describe_dataset(csv_text: str) -> DatasetDescription:
     )
 
 
-async def validate_baseline(code: str, dataset_csv: str) -> tuple[Optional[float], Optional[str]]:
+async def validate_baseline(code: str, dataset_csv: str) -> tuple[float | None, str | None]:
     if "def run" not in code:
         raise RuntimeError(
             "the baseline file must define an entry point:\n\n"
@@ -180,7 +179,7 @@ async def validate_baseline(code: str, dataset_csv: str) -> tuple[Optional[float
 
 
 async def prepare_custom_inputs(
-    code_path: str, data_path: str, display_name: Optional[str] = None
+    code_path: str, data_path: str, display_name: str | None = None
 ) -> CustomInputs:
     algorithm, code = load_code_file(code_path)
     dataset_csv = load_dataset_file(data_path)
