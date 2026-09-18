@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
-from typing import Optional
 
 from .llm_client import LLMClient
+
+log = logging.getLogger(__name__)
 
 MAX_LOGICAL_ERRORS = 3
 
@@ -37,15 +39,16 @@ Code to review:
 
 
 def enabled() -> bool:
-    """Logical-error checking is on unless `LOGIC_CHECK=0`."""
-    return os.environ.get("LOGIC_CHECK", "1").strip() not in ("0", "false", "False")
+    """Logical-error checking is on unless `CE_LOGIC_CHECK=0` (or the older `LOGIC_CHECK=0`)."""
+    raw = os.environ.get("CE_LOGIC_CHECK") or os.environ.get("LOGIC_CHECK") or "1"
+    return raw.strip().lower() not in ("0", "false", "no", "off")
 
 
 class LogicChecker:
     """Caches results by code hash, so the same candidate is never
     reviewed twice within one run."""
 
-    def __init__(self, llm_client: Optional[LLMClient]) -> None:
+    def __init__(self, llm_client: LLMClient | None) -> None:
         self.llm_client = llm_client
         self._cache: dict[str, tuple[int, list[str]]] = {}
 
@@ -66,7 +69,7 @@ class LogicChecker:
             )
             count, reasons = _parse(response.text)
         except Exception as e:  # noqa: BLE001 - never penalise a candidate for a failed review
-            print(f"[logic_check] review failed ({e}); scoring EL=0 for this candidate")
+            log.warning("logic check failed (%s: %s); scoring EL=0 for this candidate", type(e).__name__, e)
             count, reasons = 0, []
 
         result = (min(count, MAX_LOGICAL_ERRORS), reasons)

@@ -5,8 +5,6 @@ import hashlib
 import io
 import json
 from dataclasses import dataclass, field
-from typing import Optional
-
 
 EMBEDDING_DIM = 256
 
@@ -25,7 +23,7 @@ def embed(code: str) -> list[float]:
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    return sum(x * y for x, y in zip(a, b))
+    return sum(x * y for x, y in zip(a, b, strict=True))
 
 @dataclass
 class _VectorEntry:
@@ -52,10 +50,10 @@ class _MemoryEntry:
     code: str
     cosine_similarity: float
     functional_accuracy: float
-    rank: Optional[float]
+    rank: float | None
     category: str
-    agent: Optional[str]
-    algorithm: Optional[str]
+    agent: str | None
+    algorithm: str | None
 
     def rank_score(self) -> float:
         return (self.cosine_similarity + self.functional_accuracy) / 2.0
@@ -71,10 +69,10 @@ class _RankedStore:
         code: str,
         cosine_similarity: float,
         functional_accuracy: float,
-        rank: Optional[float],
+        rank: float | None,
         category: str,
-        agent: Optional[str],
-        algorithm: Optional[str],
+        agent: str | None,
+        algorithm: str | None,
     ) -> None:
         self.entries.append(
             _MemoryEntry(
@@ -93,8 +91,8 @@ class _RankedStore:
         self,
         n: int,
         category: str,
-        agent: Optional[str],
-        algorithm: Optional[str],
+        agent: str | None,
+        algorithm: str | None,
     ) -> list[dict]:
         candidates = [
             e
@@ -174,15 +172,22 @@ def run(memory: AgentMemory, args: dict) -> str:
     query = args.get("query")
     if isinstance(query, str):
         trimmed = query.strip()
-        if trimmed.lower() == "read":
-            return _handle_read(memory, args)
         try:
             parsed = json.loads(trimmed)
             if isinstance(parsed, dict) and "action" in parsed:
                 return run(memory, parsed)
         except json.JSONDecodeError:
             pass
-        return _handle_write(memory, {"code": trimmed})
+        # A bare string is a read, never a write. Writes must say so explicitly,
+        # otherwise a lookup like "logistic_regression" would be stored as code.
+        read_args = {"action": "read", "top_n": int(args.get("top_n", 5) or 5), "category": args.get("category", "code")}
+        if trimmed and trimmed.lower() != "read":
+            read_args["algorithm"] = trimmed
+        result = _handle_read(memory, read_args)
+        if json.loads(result).get("status") == "empty" and "algorithm" in read_args:
+            del read_args["algorithm"]
+            result = _handle_read(memory, read_args)
+        return result
 
     raise MemoryError("memory call requires an 'action' field or a 'query' field")
 
@@ -194,14 +199,14 @@ def _handle_write(memory: AgentMemory, args: dict) -> str:
         if path is None:
             raise MemoryError("write requires either a 'code' field or a 'path' field")
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 code = f.read()
         except OSError as e:
             raise MemoryError(f"failed to read file '{path}': {e}") from e
 
     category = args.get("category", "code")
 
-    csv_shape: Optional[tuple[int, int]] = None
+    csv_shape: tuple[int, int] | None = None
     if category == "dataset":
         try:
             csv_shape = _validate_csv(code)
@@ -241,19 +246,12 @@ def _handle_read(memory: AgentMemory, args: dict) -> str:
     return json.dumps({"status": "ok", "results": results})
 
 
-def remember_csv_file(memory: AgentMemory, path: str, category: str, algorithm: str) -> str:
-    return run(
-        memory,
-        {"action": "write", "path": path, "category": category, "algorithm": algorithm},
-    )
-
-
 def remember_text(
     memory: AgentMemory,
     code: str,
     category: str,
     algorithm: str,
-    agent: Optional[str] = None,
+    agent: str | None = None,
 ) -> str:
     args = {"action": "write", "code": code, "category": category, "algorithm": algorithm}
     if agent is not None:
